@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>APCS 裝飲料 (o711) 互動模擬器</title>
+    <style>
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; background-color: #f0f4f8; }
+        .container { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 600px; width: 100%; }
+        .input-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        button { background-color: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 16px; margin-top: 10px; width: 100%; }
+        button:hover { background-color: #0056b3; }
+        
+        /* 水杯視覺設計 */
+        #cup-container { margin-top: 30px; position: relative; display: flex; flex-direction: column; align-items: center; min-height: 300px; }
+        .cup-part { position: relative; border: 3px solid #333; border-top: none; background: rgba(255,255,255,0.8); overflow: hidden; }
+        #cup-top { border-top: 1px dashed #ccc; }
+        #water { position: absolute; bottom: 0; left: 0; width: 100%; background-color: rgba(52, 152, 219, 0.7); transition: height 0.5s ease; }
+        
+        .stats { margin-top: 20px; border-top: 2px solid #eee; padding-top: 15px; }
+        .max-rise { color: #e74c3c; font-weight: bold; font-size: 1.2em; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>裝飲料互動模擬 (APCS o711)</h2>
+    
+    <div class="input-group">
+        <label>杯子尺寸 (w1, w2, h1, h2):</label>
+        <div style="display: flex; gap: 10px;">
+            <input type="number" id="w1" value="10" placeholder="w1">
+            <input type="number" id="w2" value="5" placeholder="w2">
+            <input type="number" id="h1" value="10" placeholder="h1">
+            <input type="number" id="h2" value="10" placeholder="h2">
+        </div>
+    </div>
+
+    <div class="input-group">
+        <label>本次倒入體積 (v):</label>
+        <input type="number" id="volume-input" placeholder="輸入體積後點擊倒水">
+    </div>
+
+    <button onclick="pourWater()">倒飲料！</button>
+
+    <div id="cup-container">
+        <!-- 杯子會透過 JS 動態調整大小 -->
+        <div id="cup-top" class="cup-part"></div>
+        <div id="cup-bottom" class="cup-part"></div>
+    </div>
+
+    <div class="stats">
+        <p>目前總高度: <span id="current-h">0</span> cm</p>
+        <p>本次上升高度: <span id="last-rise">0</span> cm</p>
+        <p class="max-rise">最大上升變化量: <span id="max-rise">0</span> cm</p>
+        <button onclick="resetCup()" style="background-color: #6c757d;">重設杯子</button>
+    </div>
+</div>
+
+<script>
+    let currentTotalVolume = 0;
+    let currentHeight = 0;
+    let maxRise = 0;
+    const SCALE = 10; // 繪圖比例尺
+
+    function updateCupVisualization() {
+        const w1 = parseFloat(document.getElementById('w1').value);
+        const w2 = parseFloat(document.getElementById('w2').value);
+        const h1 = parseFloat(document.getElementById('h1').value);
+        const h2 = parseFloat(document.getElementById('h2').value);
+
+        const cupBottom = document.getElementById('cup-bottom');
+        const cupTop = document.getElementById('cup-top');
+
+        // 設定杯子視覺大小
+        cupBottom.style.width = (w1 * SCALE) + 'px';
+        cupBottom.style.height = (h1 * SCALE) + 'px';
+        cupTop.style.width = (w2 * SCALE) + 'px';
+        cupTop.style.height = (h2 * SCALE) + 'px';
+
+        // 移除舊的水，重新根據當前水位繪製
+        cupBottom.innerHTML = '';
+        cupTop.innerHTML = '';
+
+        const waterBottom = document.createElement('div');
+        waterBottom.id = 'water';
+        
+        const waterTop = document.createElement('div');
+        waterTop.id = 'water';
+
+        if (currentHeight <= h1) {
+            waterBottom.style.height = (currentHeight * SCALE) + 'px';
+            cupBottom.appendChild(waterBottom);
+        } else {
+            waterBottom.style.height = '100%';
+            cupBottom.appendChild(waterBottom);
+            
+            waterTop.style.height = ((currentHeight - h1) * SCALE) + 'px';
+            cupTop.appendChild(waterTop);
+        }
+    }
+
+    function pourWater() {
+        const n_v = parseFloat(document.getElementById('volume-input').value);
+        if (isNaN(n_v) || n_v <= 0) return;
+
+        const w1 = parseFloat(document.getElementById('w1').value);
+        const w2 = parseFloat(document.getElementById('w2').value);
+        const h1 = parseFloat(document.getElementById('h1').value);
+        const h2 = parseFloat(document.getElementById('h2').value);
+
+        const v_bottom_max = w1 * w1 * h1;
+        const v_top_max = w2 * w2 * h2;
+        const v_total_max = v_bottom_max + v_top_max;
+
+        const oldHeight = currentHeight;
+
+        // 計算倒水後的總體積（不可超過總容量）[1]
+        currentTotalVolume = Math.min(currentTotalVolume + n_v, v_total_max);
+
+        // 邏輯判斷水位高度 [1]
+        if (currentTotalVolume <= v_bottom_max) {
+            currentHeight = currentTotalVolume / (w1 * w1);
+        } else {
+            let remainingV = currentTotalVolume - v_bottom_max;
+            currentHeight = h1 + (remainingV / (w2 * w2));
+        }
+
+        const rise = currentHeight - oldHeight;
+        if (rise > maxRise) maxRise = rise;
+
+        // 更新 UI
+        document.getElementById('current-h').innerText = currentHeight.toFixed(2);
+        document.getElementById('last-rise').innerText = rise.toFixed(2);
+        document.getElementById('max-rise').innerText = maxRise.toFixed(2);
+        
+        updateCupVisualization();
+        document.getElementById('volume-input').value = '';
+    }
+
+    function resetCup() {
+        currentTotalVolume = 0;
+        currentHeight = 0;
+        maxRise = 0;
+        document.getElementById('current-h').innerText = '0';
+        document.getElementById('last-rise').innerText = '0';
+        document.getElementById('max-rise').innerText = '0';
+        updateCupVisualization();
+    }
+
+    // 初始初始化
+    updateCupVisualization();
+</script>
+
+</body>
+</html>
